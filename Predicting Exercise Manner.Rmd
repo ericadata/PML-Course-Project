@@ -152,7 +152,7 @@ The out of sample accuracy was even higher with standardizing.
 ###Results
 When intially testing the models, the out of sample error rate was:  
 modelFit4: 1 - 0.9704082 = 0.0295918  
-modelFit3: 1 - 0.9586735 = 0.0413265  
+modelFit3: 1 - 0.9591837 = 0.0408163  
 The model needed to be validated against the testing data set and checked using the Coursera website. In order to use the data set to predict on, it was modified to match the changes made to the training set.
 ```{r cache=TRUE}
 features <- colnames(training)
