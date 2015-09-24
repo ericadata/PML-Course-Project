@@ -167,4 +167,4 @@ y <- predict(modelFit3, newdata=quiz[ ,features])
 y
 which(y != x)
 ```
-In models did not match in two of the twenty test cases. When checking if the prediction were correct, the most accurate model (modelFit4) was  first used. It was correct for all but one test case: 11. modelFit3's answer was then applied to test case 11 and was correct. 
+The models did not match in two of the twenty test cases. When checking if the predictions were correct, the most accurate model (modelFit4) was first used. It was correct for all but one test case: 11. modelFit3's answer was then applied to test case 11 and was correct.
