@@ -1,0 +1,170 @@
+---
+title: 'PML Writeup: Predicting Exercise Manner'
+author: "Erica Moses"
+date: "September 23, 2015"
+output: html_document
+---
+###Synopsis  
+This project is for the John Hopkins' Practical Machine Learning Course on Coursera. Provided from a [Weight Lifting Exercise Dataset](http://groupware.les.inf.puc-rio.br/har), was the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who performed barbell lifts correctly and incorrectly in 5 different ways. The purpose was to predict the manner in which participants did the exercise. This was the 'classe' variable in the training set and 'problem_id' in the testing set.  
+
+In order to correctly predict the testing set, two models were used.  These models both used random forests as the prediction algorithm and cross-validation.
+
+###Load the Data
+The data was loaded into R as follows:
+```{r cache=TRUE, warning=FALSE}
+fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileURL, destfile= "./pml-training.csv", method= "curl")
+fileURL2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileURL2, destfile= "./pml-testing.csv", method= "curl")
+training <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+dim(training); dim(testing)
+```  
+
+###Features
+Since the analysis requires predicting from accelerometer data, unrelated variables were removed.
+```{r cache=TRUE}
+# names(training) #remove 1st 7 columns
+training <- training[,-(1:7)]
+```
+Then the data was looked at for NA values. Many columns either had no NA values or had approximately 98% of data missing. Only the complete columns were retained.
+```{r cache=TRUE, eval=FALSE}
+#which columns contain NA values
+colSums(is.na(training))
+```
+```{r cache=TRUE}
+training <- training[, colSums(is.na(training)) == 0]
+dim(training)
+```
+Next, remaining features were checked for near zero variablilty.
+```{r cache=TRUE, warning=FALSE}
+library(caret)
+nzv <- nearZeroVar(training, saveMetrics = T)
+table(nzv$nzv)
+```
+As a result, none of the features needed to be removed.  
+
+###Data Slicing
+In order to do cross-validation, the data labeled 'training' was split into 4 equal parts, then further split into training and test sets, with 60-40 ratios respectively.
+```{r cache=TRUE}
+set.seed(789)
+inTrain <- createDataPartition(y=training$classe, p=0.50, list=F)
+split1 <- training[inTrain,]
+split2 <- training[-inTrain,]
+set.seed(789)
+inTrain <- createDataPartition(y=split1$classe, p=0.50, list=F)
+split3 <- split1[inTrain,]
+split4 <- split1[-inTrain,]
+set.seed(789)
+inTrain <- createDataPartition(y=split2$classe, p=0.50, list=F)
+split5 <- split2[inTrain,]
+split6 <- split2[-inTrain,]
+
+set.seed(548)
+inTrain <- createDataPartition(y=split3$classe, p=0.60, list=F)
+train1 <- split3[inTrain,]
+test1 <- split3[-inTrain,]
+set.seed(548)
+inTrain <- createDataPartition(y=split4$classe, p=0.60, list=F)
+train2 <- split4[inTrain,]
+test2 <- split4[-inTrain,]
+set.seed(548)
+inTrain <- createDataPartition(y=split5$classe, p=0.60, list=F)
+train3 <- split5[inTrain,]
+test3 <- split5[-inTrain,]
+set.seed(548)
+inTrain <- createDataPartition(y=split6$classe, p=0.60, list=F)
+train4 <- split6[inTrain,]
+test4 <- split6[-inTrain,]
+```  
+
+###Prediction Algorithms  
+In each of the following models, all the remaining features are used to predict 'classe'.  
+The first method used was prediction with trees.
+```{r cache=TRUE}
+##train1
+#Prediction Algorithm: with trees
+library(rpart)
+set.seed(5768)
+modelFit1 <- train(classe ~ ., method = "rpart", data=train1)
+modelFit1
+modelFit1$finalModel
+
+##test1
+#predictions
+predictions1 <- predict(modelFit1, newdata=test1)
+confusionMatrix(predictions1, test1$classe)
+```
+The out of sample accuracy was 0.5013 which is very low. Next, the data's mean and variance was evaluated to see if the data needed standardizing. Since many features were high in variability, a preProcess argument was added to the training model.
+```{r cache=TRUE, eval=FALSE}
+##train2
+#Preprocess: does the data need standardizing?
+mean <- colMeans(train2[,-53]); var <- apply(train2[,-53], 2, sd)
+rbind(mean, var) #lots of variation
+```
+```{r cache=TRUE}
+##train2
+set.seed(387)
+modelFit2 <- train(classe ~ ., preProcess=c("center", "scale"),
+                   method = "rpart", data = train2)
+
+##test2
+#predictions
+predictions2 <- predict(modelFit2, newdata=test2)
+confusionMatrix(predictions2, test2$classe)[["table"]]
+confusionMatrix(predictions2, test2$classe)[["overall"]][["Accuracy"]]
+```
+With standardizing the data, the out of sample accuracy was even lower. A new direction was taken instead. Random forests was used with cross validation to prevent overfitting in the new model.
+```{r cache=TRUE, warning=FALSE}
+##train3
+#Prediction Algorithm: random forests w/ 
+#cross validation to prevent overfitting
+set.seed(576)
+modelFit3 <- train(classe ~ ., method = "rf", prox=T, 
+                  trControl = trainControl(method = "cv"), data=train3)
+
+##test3
+#predictions
+predictions3 <- predict(modelFit3, newdata=test3)
+confusionMatrix(predictions3, test3$classe)[["table"]]
+confusionMatrix(predictions3, test3$classe)[["overall"]][["Accuracy"]]
+```
+The out of sample accuracy was much higher and indicates that random forests would be an ideal method. Standardizing was added to the model, to see if it would have a negative impact again, or improve the model's accuracy.
+```{r cache=TRUE}
+##train4
+#Prediction Algorithm: random forests w/ 
+#cross validation to prevent overfitting and 
+#standardizing
+set.seed(356)
+modelFit4 <- train(classe ~ ., method = "rf", prox=T, 
+                   preProcess=c("center", "scale"),
+                   trControl = trainControl(method = "cv"),
+                   data=train4)
+
+##test4
+#predictions
+predictions4 <- predict(modelFit4, newdata=test4)
+confusionMatrix(predictions4, test4$classe)[["table"]]
+confusionMatrix(predictions4, test4$classe)[["overall"]][["Accuracy"]]
+```
+The out of sample accuracy was even higher with standardizing.
+
+###Results
+When intially testing the models, the out of sample error rate was:  
+modelFit4: 1 - 0.9704082 = 0.0295918  
+modelFit3: 1 - 0.9586735 = 0.0413265  
+The model needed to be validated against the testing data set and checked using the Coursera website. In order to use the data set to predict on, it was modified to match the changes made to the training set.
+```{r cache=TRUE}
+features <- colnames(training)
+quiz <- testing
+quiz$classe <- quiz$problem_id
+```
+The top two models were used to predict the outcome.
+```{r cache=TRUE}
+x <- predict(modelFit4, newdata=quiz[ ,features])
+x
+y <- predict(modelFit3, newdata=quiz[ ,features])
+y
+which(y != x)
+```
+In models did not match in two of the twenty test cases. When checking if the prediction were correct, the most accurate model (modelFit4) was  first used. It was correct for all but one test case: 11. modelFit3's answer was then applied to test case 11 and was correct. 
